@@ -1,0 +1,29 @@
+mode: abopt
+model:
+  #checkpoint: ./trained_models/codesign_single.pt
+  #checkpoint: /home/data1/cjm/project/AbMEGD/logs/mm_AbMEGD_V2/checkpoints/308000.pt
+  checkpoint: /home/data1/cjm/project/AbMEGD/logs/codesign_single2024_2025_01_04__20_36_36/checkpoints/374000.pt
+
+sampling:
+  seed: 2024
+  sample_structure: true
+  sample_sequence: true
+  cdrs:
+    - H_CDR3
+  num_samples: 100
+  optimize_steps:
+    - 1
+    - 2
+    - 4
+    - 8
+    - 16
+    - 32
+    - 64
+
+dataset:
+  test:
+    type: sabdab
+    summary_path: ./data2024/sabdab_summary_all.tsv
+    chothia_dir: ./data2024/all_structures/chothia
+    processed_dir: ./data2024/processed
+    split: test
