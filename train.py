@@ -7,11 +7,11 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from diffab.datasets import get_dataset
-from diffab.models import get_model
-from diffab.utils.misc import *
-from diffab.utils.data import *
-from diffab.utils.train import *
+from AbMEGD.datasets import get_dataset
+from AbMEGD.models import get_model
+from AbMEGD.utils.misc import *
+from AbMEGD.utils.data import *
+from AbMEGD.utils.train import *
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -124,7 +124,7 @@ if __name__ == '__main__':
                 model.train()
                 
                 batch = recursive_to(next(train_iterator), args.device)
-                
+                import ipdb; ipdb.set_trace()
                 loss_dict = model(batch)
                 raw_loss = sum_weighted_losses(loss_dict, config.train.loss_weights)
                 
