@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from AbMEGD.modules.common.layers import mask_zero, LayerNorm
-from AbMEGD.modules.common.geometry import global_to_local, local_to_global, normalize_vector
+from diffab.modules.common.layers import mask_zero, LayerNorm
+from diffab.modules.common.geometry import global_to_local, local_to_global, normalize_vector
 
 def _alpha_from_logits(logits, mask, inf=1e5):
     N, L, _, _ = logits.size()
@@ -61,34 +61,43 @@ class GABlock(nn.Module):
                                             nn.Linear(node_feat_dim, node_feat_dim), nn.ReLU(),
                                             nn.Linear(node_feat_dim, node_feat_dim))
     
+    
     def _atom_logits(self, aaa_feat, vec, mask_atoms):
-        # Input shapes from your debugger:
-        # aaa_feat:   torch.Size([15840, 64])
-        # vec:        torch.Size([15840, 8, 64])
-        # mask_atoms: torch.Size([16, 198, 5])
-
+        # aaa_feat:   (N * L * A, atom_feat_dim)
+        # vec:        (N * L * A, vec_dim_true) where vec_dim_true might be reshaped
+        # mask_atoms: (N, L, A)
         N, L, A = mask_atoms.shape
         atom_feat_dim = aaa_feat.shape[-1]
-        
-        #import ipdb; ipdb.set_trace()
-        vec_dim_expected = self.vec_to_scalar.in_features # This should be 512
-        vec_flattened = vec.reshape(-1, vec_dim_expected) # Shape: (15840, 512)
 
+        # --- 1. SAFE RESHAPING (Based on debugging insights) ---
         # Reshape flattened features back to their structured (N, L, A, Dim) form
+        
         aaa_feat_reshaped = aaa_feat.view(N, L, A, atom_feat_dim)
-        vec_reshaped = vec_flattened.view(N, L, A, vec_dim_expected)
+        
+        # This is the most likely source of error if vec_dim is not what's expected
+        vec_dim_expected = self.vec_to_scalar.in_features
+        vec_reshaped = vec.view(N, L, A, vec_dim_expected)
 
-        # Now all tensors have consistent structured shapes for broadcasting
+
+        # --- 2. SAFE AGGREGATION (The core fix for NaN) ---
         mask_atoms_expanded = mask_atoms.unsqueeze(-1)
-        valid_atom_counts = mask_atoms.sum(dim=2, keepdim=True).clamp(min=1e-8)
         
-        # Aggregate atomic scalar features
-        residue_atom_feat = (aaa_feat_reshaped * mask_atoms_expanded).sum(dim=2) / valid_atom_counts
-        
-        # Aggregate atomic vector features
-        residue_vec_feat = (vec_reshaped * mask_atoms_expanded).sum(dim=2) / valid_atom_counts
+        # Denominator: Use epsilon for absolute safety against division by zero
+        valid_atom_counts = mask_atoms.sum(dim=2, keepdim=True) + 1e-8
 
-        # Continue with the rest of your correct logic
+        # Numerator: Apply mask BEFORE summing
+        masked_aaa_feat = aaa_feat_reshaped * mask_atoms_expanded
+        masked_vec_feat = vec_reshaped * mask_atoms_expanded
+        
+        # Summation
+        sum_aaa_feat = masked_aaa_feat.sum(dim=2)
+        sum_vec_feat = masked_vec_feat.sum(dim=2)
+        
+        # Safe Division
+        residue_atom_feat = sum_aaa_feat / valid_atom_counts
+        residue_vec_feat = sum_vec_feat / valid_atom_counts
+
+        # --- 3. The rest of the logic ---
         residue_vec_feat_scalar = self.vec_to_scalar(residue_vec_feat)
         atom_feat_combined = torch.cat([residue_atom_feat, residue_vec_feat_scalar], dim=-1)
         
@@ -96,9 +105,9 @@ class GABlock(nn.Module):
         key_a = _heads(self.proj_atom_key(atom_feat_combined), self.num_heads, self.query_key_dim)
         
         logits_atom = (query_a.unsqueeze(2) * key_a.unsqueeze(1) * (1 / np.sqrt(self.query_key_dim))).sum(-1)
+        
         return logits_atom, atom_feat_combined
 
-    
     def _node_logits(self, x):
         query_l = _heads(self.proj_query(x), self.num_heads, self.query_key_dim)
         key_l = _heads(self.proj_key(x), self.num_heads, self.query_key_dim)
@@ -158,6 +167,7 @@ class GABlock(nn.Module):
         logits_pair = self._pair_logits(z)
         logits_spatial = self._spatial_logits(R, t, x)
         
+
         logits_sum = logits_node + logits_pair + logits_spatial + logits_atom
         alpha = _alpha_from_logits(logits_sum * np.sqrt(1 / 4), mask)
 
@@ -177,6 +187,7 @@ class GAEncoder(nn.Module):
 
     def __init__(self, node_feat_dim, pair_feat_dim, num_layers, ga_block_opt={}):
         super(GAEncoder, self).__init__()
+
         self.blocks = nn.ModuleList([
             GABlock(
                 node_feat_dim=node_feat_dim, 
@@ -196,5 +207,4 @@ class GAEncoder(nn.Module):
         
         for block in self.blocks:
             res_feat = block(R, t, res_feat, pair_feat, aaa_feat, vec, mask, mask_atoms)
-            
         return res_feat
