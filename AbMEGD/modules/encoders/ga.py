@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from diffab.modules.common.layers import mask_zero, LayerNorm
-from diffab.modules.common.geometry import global_to_local, local_to_global, normalize_vector
+from AbMEGD.modules.common.layers import mask_zero, LayerNorm
+from AbMEGD.modules.common.geometry import global_to_local, local_to_global, normalize_vector
 
 def _alpha_from_logits(logits, mask, inf=1e5):
     N, L, _, _ = logits.size()
