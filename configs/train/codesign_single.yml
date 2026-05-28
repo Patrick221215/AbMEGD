@@ -1,0 +1,40 @@
+model:
+  type: AbMEGD
+  res_feat_dim: 128
+  pair_feat_dim: 64
+  diffusion:
+    num_steps: 100
+    eps_net_opt:
+      num_layers: 6
+  train_structure: true
+  train_sequence: true
+
+train:
+  loss_weights:
+    rot: 1.0
+    pos: 1.0
+    seq: 1.0
+
+dataset:
+  train:
+    type: sabdab
+    summary_path: ./data/sabdab_summary_all.tsv
+    chothia_dir: ./data/all_structures/chothia
+    processed_dir: ./data
+    split: train
+    transform:
+      - type: mask_single_cdr
+      - type: merge_chains
+      - type: patch_around_anchor
+
+  val:
+    type: sabdab
+    summary_path: ./data/sabdab_summary_all.tsv
+    chothia_dir: ./data/all_structures/chothia
+    processed_dir: ./data
+    split: val
+    transform:
+      - type: mask_single_cdr
+        selection: CDR3
+      - type: merge_chains
+      - type: patch_around_anchor
