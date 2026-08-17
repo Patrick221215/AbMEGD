@@ -34,3 +34,10 @@ The `data` folder contains a snapshot of the dataset index (`sabdab_summary_all.
 ```bash
 python train.py ./configs/train/<config-file-name>
 ```
+
+## License
+
+AbMEGD is released under the [Apache License 2.0](./LICENSE).
+
+This repository builds upon and adapts code from [DiffAb](https://github.com/luost26/diffab),
+
